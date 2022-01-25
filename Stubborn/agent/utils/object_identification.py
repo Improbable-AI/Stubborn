@@ -10,7 +10,7 @@ from scipy.stats.stats import pearsonr
 import numpy as np
 
 
-NB = False
+NB = True
 with open('./Stubborn/log_path_16_middle.pickle', 'rb') as handle:
     b = pickle.load(handle)
 with open('./Stubborn/log_path_17_conf_middle.pickle', 'rb') as handle:
@@ -19,6 +19,8 @@ for i in range(len(b)):
     lg = b[i]['goal_log']
     for j in range(len(lg)):
         b[i]['goal_log'][j]['conflict'] = b2[i]['goal_log'][j]['conflict']
+
+stepsize = 200
 
 if not NB:
     params = {
@@ -46,27 +48,27 @@ if not NB:
     }
 else:
     params = {
-        1: (0, 2, 200),
-        2: (0, 2, 70),
-        3: (0, 2, 70),
-        4: (0, 2, 70),
-        5: (0, 2, 70),
-        6: None,
-        7: (0, 2, 200),
-        8: (0, 2, 200),
-        9: (0, 2, 200),
-        10: (0, 2, 200),
-        11: None,
-        12: (0, 2, 200),
-        13: None,
-        14: None,  # NA
-        15: (0, 2, 200),
-        16: (0, 2, 200),  # 0.0003
-        17: (0, 2, 200),
-        18: (0, 2, 200),
-        19: None,  # NA
-        20: (0, 2, 200),
-        21: None,  # NA
+        1: (0, 2, stepsize),
+        2: (0, 2, stepsize),
+        3: (0, 2, stepsize),
+        4: (0, 2, stepsize),
+        5: (0, 2, stepsize),
+        6: (0, 2, stepsize),
+        7: (0, 2, stepsize),
+        8: (0, 2, stepsize),
+        9: (0, 2, stepsize),
+        10: (0, 2, stepsize),
+        11: (0, 2, stepsize),
+        12: (0, 2, stepsize),
+        13: (0,2,stepsize),
+        14: (0,2,stepsize),  # NA
+        15: (0, 2, stepsize),
+        16: (0, 2, stepsize),  # 0.0003
+        17: (0, 2, stepsize),
+        18: (0, 2, stepsize),
+        19: (0, 2, stepsize),  # NA
+        20: (0, 2, stepsize),
+        21: (0, 2, stepsize),  # NA
     }
 
 def item2feature(item):

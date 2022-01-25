@@ -223,12 +223,12 @@ def get_args():
     # attempt 3: 0 0 100 1 0 0 1 0 0 1 1 third
 
     # only need to change 3 for next: hardrednet, goal selection scheme, log path
-    parser.add_argument('--hard_rednet',type = int, default = 1) # originally 0
+    parser.add_argument('--hard_rednet',type = int, default = 0) # originally 0
     parser.add_argument('--smart_global_goal', type = int, default = 0) # originally 1
     parser.add_argument('--magnify_goal_when_hard',type = int, default = 100) #originally 100
     parser.add_argument("--move_forward_after_stop",type = int, default = 1) #originally 1
     parser.add_argument("--turn_around_in_beginning",type = int, default = 0) #originally 0
-    parser.add_argument("--goal_selection_scheme",type = int, default = 1) # 0: new one 1: old one
+    parser.add_argument("--goal_selection_scheme",type = int, default = 0) # 0: new one 1: old one
     parser.add_argument('--threshold_mode',type = int, default = 1) # 0: low 1: mixed 2:high 3: 0.85 consistently
     parser.add_argument("--small_collision_map_for_goal",type = int, default = 0)
     parser.add_argument("--naive_bayes",type = int, default = 0) # you need to actually change feature in object identification lol

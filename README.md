@@ -22,7 +22,6 @@ Users need to download pretrained weights and environment dataset before they ca
 ### Pretrained Weights
 
 Users can download pretrained weights for RedNet [here](https://drive.google.com/drive/folders/1SM75RweHtHQ13lu9fZkVjkOlWMaWpFuZ?usp=sharing).
-
 Users can download data used to train the Object Detection Module [here](add thi link)
 
 
@@ -68,3 +67,4 @@ TODO
 ## Related Projects
 - This project builds on the [Goal-Oriented Semantic Policy](https://devendrachaplot.github.io/projects/semantic-exploration) paper.
 - Rednet Object Segmentation Model is trained by Joel Ye et. al at https://joel99.github.io/objectnav/.
+-

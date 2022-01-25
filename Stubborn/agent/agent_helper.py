@@ -173,7 +173,6 @@ class Quick_Sem_Exp_Env_Agent_Helper:
 
         # Reset reward if new long-term goal
         self.timestep += 1
-        planner_inputs = planner_inputs[0]
         self.goal_name = planner_inputs['goal_name']
         if self.args.visualize or self.args.print_images:
             self.vis_image = vu.init_vis_image(self.goal_name, self.legend)

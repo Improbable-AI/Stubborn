@@ -59,6 +59,9 @@ class Semantic_Mapping(nn.Module):
         self.grid_nc = args.record_frames + args.record_angle
 
     def forward(self, obs, pose_obs, maps_last, poses_last,agent_states):
+        pose_obs = pose_obs[None,:]
+        maps_last = maps_last[None,:]
+        poses_last = poses_last[None,:]
         bs, c, h, w = obs.size()
         depth = obs[:, 3, :, :]
 
@@ -86,8 +89,7 @@ class Semantic_Mapping(nn.Module):
         self.feat[:, 1:, :] = nn.AvgPool2d(self.du_scale)(
             obs[:, 4:, :, :]
         ).view(bs, c - 4, h // self.du_scale * w // self.du_scale)
-        #print("torch unique ",torch.unique(self.feat[:, 1:, :]))
-        #print("torch size",self.feat[:,1:,:].shape)
+
 
         XYZ_cm_std = XYZ_cm_std.permute(0, 3, 1, 2)
         XYZ_cm_std = XYZ_cm_std.view(XYZ_cm_std.shape[0],
@@ -96,16 +98,12 @@ class Semantic_Mapping(nn.Module):
 
         voxels = du.splat_feat_nd(
             self.init_grid * 0., self.feat, XYZ_cm_std).transpose(2, 3)
-        #print("voxels unique",torch.unique(voxels))
 
         min_z = int(25 / z_resolution - min_h)
         max_z = int((self.agent_height + 1) / z_resolution - min_h)
 
         agent_height_proj = voxels[..., min_z:max_z].sum(4)
         all_height_proj = voxels.sum(4)
-        #print("all height unique",torch.unique(all_height_proj))
-        #print("agent height unique",torch.unique(agent_height_proj)) # this is of interest
-        #print("agent height shape",agent_height_proj.shape)
 
         # suspect that it is in here we deal with mask and confidence scores
 
@@ -167,10 +165,8 @@ class Semantic_Mapping(nn.Module):
 
         rotated = F.grid_sample(agent_view, rot_mat, align_corners=True)
         translated = F.grid_sample(rotated, trans_mat, align_corners=True)
-        #print("translated size",translated.shape)
-        #print("translated unique",torch.unique(translated))
         t2 = translated.unsqueeze(1)
-        #print("t2 size",t2.shape)
+
         for i in range(4,4+2+2+self.args.use_gt_mask):
             k = torch.max(self.feat[0,i-3,:])
             t2[0,0,i,:,:][t2[0,0,i,:,:]>0.0] = k
@@ -213,4 +209,4 @@ class Semantic_Mapping(nn.Module):
         agent_states.local_grid[5,:,:] = torch.clone(nn.MaxPool2d(self.args.grid_resolution)(
             map_pred[0, 4:5, :, :])[0])
 
-        return fp_map_pred, map_pred, pose_pred, current_poses
+        return fp_map_pred[0], map_pred[0], pose_pred[0], current_poses[0]

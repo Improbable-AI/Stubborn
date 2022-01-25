@@ -17,11 +17,10 @@ import pickle
 
 
 class Quick_Agent_State:
-    def __init__(self,args,num_scenes = 1):
+    def __init__(self,args):
         self.args = args
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
-        self.num_scenes = num_scenes
         self.nc = 2 + 4 + 1 + 2 + self.args.use_gt_mask# num channels
         self.gt_mask_channel = 8
         if args.cuda:
@@ -41,29 +40,29 @@ class Quick_Agent_State:
                                       self.local_grid_h).float().to(self.device)
 
 
-
+        # full_map local_map full_pose local_pose origins lmb planner_pose_inputs infos
         # Initializing full and local map
-        self.full_map = torch.zeros(num_scenes, self.nc, self.full_w, self.full_h).float().to(
+        self.full_map = torch.zeros(self.nc, self.full_w, self.full_h).float().to(
             self.device)
-        self.local_map = torch.zeros(num_scenes,self.nc, self.local_w,
+        self.local_map = torch.zeros(self.nc, self.local_w,
                                 self.local_h).float().to(self.device)
         self.global_goal_loc = torch.zeros(self.full_w,self.full_h)
         self.global_goal_index = (-1,-1)
 
         # Initial full and local pose
-        self.full_pose = torch.zeros(num_scenes, 3).float().to(self.device)
-        self.local_pose = torch.zeros(num_scenes, 3).float().to(self.device)
+        self.full_pose = torch.zeros( 3).float().to(self.device)
+        self.local_pose = torch.zeros( 3).float().to(self.device)
 
         # Origin of local map
-        self.origins = np.zeros((num_scenes, 3))
+        self.origins = np.zeros((3))
 
         # Local Map Boundaries
-        self.lmb = np.zeros((num_scenes, 4)).astype(int)
+        self.lmb = np.zeros(( 4)).astype(int)
 
         # Planner pose inputs has 7 dimensions
         # 1-3 store continuous global agent location
         # 4-7 store local map boundaries
-        self.planner_pose_inputs = np.zeros((num_scenes, 7))
+        self.planner_pose_inputs = np.zeros(( 7))
 
         # Global policy observation space
         self.es = 2
@@ -89,6 +88,7 @@ class Quick_Agent_State:
 
 
     def reset(self):
+        print("quick")
         self.l_step = 0
         self.g_step = 0
         self.step = 0
@@ -156,49 +156,48 @@ class Quick_Agent_State:
         self.step = 0
 
         self.poses = torch.from_numpy(np.asarray(
-            [infos[env_idx]['sensor_pose'] for env_idx in range(self.num_scenes)])
+            infos['sensor_pose'])
         ).float().to(self.device)
-
         _, self.local_map, _, self.local_pose = \
             self.sem_map_module(obs, self.poses, self.local_map, self.local_pose,self)
 
         # Compute Global policy input
         self.locs = self.local_pose.cpu().numpy()
 
-        for e in range(self.num_scenes):
-            r, c = self.locs[e, 1], self.locs[e, 0]
-            loc_r, loc_c = [int(r * 100.0 / self.args.map_resolution),
-                            int(c * 100.0 / self.args.map_resolution)]
+        r, c = self.locs[1], self.locs[0]
+        loc_r, loc_c = [int(r * 100.0 / self.args.map_resolution),
+                        int(c * 100.0 / self.args.map_resolution)]
 
-            self.local_map[e, 2:4, loc_r - 1:loc_r + 2,
-            loc_c - 1:loc_c + 2] = 1.
+        self.local_map[2:4, loc_r - 1:loc_r + 2,
+        loc_c - 1:loc_c + 2] = 1.
 
         self.global_goals = [[int(0.1 * self.local_w), int(0.1 * self.local_h)]]
         self.global_goals = [[min(x, int(self.local_w - 1)), min(y, int(self.local_h - 1))]
                         for x, y in self.global_goals]
 
-        self.goal_maps = [np.zeros((self.local_w, self.local_h)) for _ in range(self.num_scenes)]
+        self.goal_maps = np.zeros((self.local_w, self.local_h))
 
-        for e in range(self.num_scenes):
-            self.goal_maps[e][self.global_goals[e][0], self.global_goals[e][1]] = 1
 
-        self.planner_inputs = [{} for e in range(self.num_scenes)]
-        for e, p_input in enumerate(self.planner_inputs):
-            p_input['map_pred'] = self.local_map[e, 0, :, :].cpu().numpy()
-            p_input['exp_pred'] = self.local_map[e, 1, :, :].cpu().numpy()
-            p_input['pose_pred'] = self.planner_pose_inputs[e]
-            p_input['goal'] = self.goal_maps[e]  # global_goals[e]
-            p_input['new_goal'] = 1
-            p_input['found_goal'] = 0
-            p_input['wait'] = 0 # does it matter?
-            if self.args.visualize or self.args.print_images:
-                self.local_map[e, -1, :, :] = 1e-5
-                p_input['sem_map_pred'] = self.local_map[e, 4:, :, :
-                                          ].argmax(0).cpu().numpy()
+        self.goal_maps[self.global_goals[0][0], self.global_goals[0][1]] = 1
 
-        #obs, _, done, infos = self.envs.plan_act_and_preprocess(self.planner_inputs)
 
-        #g_reward = 0
+        p_input = {}
+
+        p_input['map_pred'] = self.local_map[0, :, :].cpu().numpy()
+        p_input['exp_pred'] = self.local_map[1, :, :].cpu().numpy()
+        p_input['pose_pred'] = self.planner_pose_inputs
+        p_input['goal'] = self.goal_maps  # global_goals[e]
+        p_input['new_goal'] = 1
+        p_input['found_goal'] = 0
+        p_input['wait'] = 0  # does it matter?
+        if self.args.visualize or self.args.print_images:
+            self.local_map[-1, :, :] = 1e-5
+            p_input['sem_map_pred'] = self.local_map[4:, :, :
+                                      ].argmax(0).cpu().numpy()
+
+
+        self.planner_inputs = p_input
+
 
         torch.set_grad_enabled(False)
 
@@ -246,31 +245,30 @@ class Quick_Agent_State:
 
 
 
-        self.full_pose[:, :2] = self.args.map_size_cm / 100.0 / 2.0
+        self.full_pose[:2] = self.args.map_size_cm / 100.0 / 2.0
 
         locs = self.full_pose.cpu().numpy()
-        self.planner_pose_inputs[:, :3] = locs
-        for e in range(self.num_scenes):
-            r, c = locs[e, 1], locs[e, 0]
-            loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
-                            int(c * 100.0 / args.map_resolution)]
+        self.planner_pose_inputs[:3] = locs
 
-            self.full_map[e, 2:4, loc_r - 1:loc_r + 2, loc_c - 1:loc_c + 2] = 1.0
+        r, c = locs[1], locs[0]
+        loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
+                        int(c * 100.0 / args.map_resolution)]
 
-            self.lmb[e] = self.get_local_map_boundaries((loc_r, loc_c),
-                                              (self.local_w, self.local_h),
-                                              (self.full_w, self.full_h))
+        self.full_map[2:4, loc_r - 1:loc_r + 2, loc_c - 1:loc_c + 2] = 1.0
 
-            self.planner_pose_inputs[e, 3:] = self.lmb[e]
-            self.origins[e] = [self.lmb[e][2] * args.map_resolution / 100.0,
-                          self.lmb[e][0] * args.map_resolution / 100.0, 0.]
+        self.lmb = self.get_local_map_boundaries((loc_r, loc_c),
+                                                 (self.local_w, self.local_h),
+                                                 (self.full_w, self.full_h))
 
-        for e in range(self.num_scenes):
-            self.local_map[e] = self.full_map[e, :,
-                                    self.lmb[e, 0]:self.lmb[e, 1],
-                                    self.lmb[e, 2]:self.lmb[e, 3]]
-            self.local_pose[e] = self.full_pose[e] - \
-                torch.from_numpy(self.origins[e]).to(self.device).float()
+        self.planner_pose_inputs[3:] = self.lmb
+        self.origins = np.array([self.lmb[2] * args.map_resolution / 100.0,
+                        self.lmb[0] * args.map_resolution / 100.0, 0.])
+
+        self.local_map = self.full_map[:,
+                         self.lmb[0]:self.lmb[1],
+                         self.lmb[2]:self.lmb[3]]
+        self.local_pose = self.full_pose - \
+                          torch.from_numpy(self.origins).to(self.device).float()
 
     def set_hard_goal(self):
         self.hard_goal = True
@@ -278,7 +276,7 @@ class Quick_Agent_State:
     def recur_fill(self,i,j):
         if i < 0 or j < 0 or i >= self.full_w or j >= self.full_h:
             return
-        if self.global_goal_loc[i,j] != 0 or self.full_map[0,4,i,j] <= 0.1:
+        if self.global_goal_loc[i,j] != 0 or self.full_map[4,i,j] <= 0.1:
             return
         self.global_goal_loc[i,j] = 1
         for di in range(-1,1):
@@ -302,7 +300,7 @@ class Quick_Agent_State:
                 i + 1) * self.args.grid_resolution
         c1, c2 = j * self.args.grid_resolution, (
                 j + 1) * self.args.grid_resolution
-        self.cat_semantic_map[r1:r2, c1:c2] = self.local_map[0, 4, r1:r2, c1:c2]
+        self.cat_semantic_map[r1:r2, c1:c2] = self.local_map[ 4, r1:r2, c1:c2]
         return True
 
 
@@ -310,17 +308,17 @@ class Quick_Agent_State:
 
     def save_global_goal(self):
         self.found_goal = True
-        self.full_map[0, 4, self.lmb[0, 0]:self.lmb[0, 1],
-        self.lmb[0, 2]:self.lmb[0, 3]] = \
-            self.local_map[0,4]
-        max_index = np.unravel_index(torch.argmax(self.full_map[0, 4, :, :]).cpu().numpy(),
+        self.full_map[ 4, self.lmb[ 0]:self.lmb[1],
+        self.lmb[2]:self.lmb[3]] = \
+            self.local_map[4]
+        max_index = np.unravel_index(torch.argmax(self.full_map[ 4, :, :]).cpu().numpy(),
                                      (self.full_w,self.full_h))
         self.global_goal_index = max_index
         self.recur_fill(max_index[0],max_index[1])
 
     # it has to be scattered large
     def global_to_local(self):
-        r1,r2,c1,c2 = self.lmb[0,0],self.lmb[0,1],self.lmb[0,2],self.lmb[0,3]
+        r1,r2,c1,c2 = self.lmb[0],self.lmb[1],self.lmb[2],self.lmb[3]
         r,c = self.global_goal_index
         goal_maps = np.zeros((self.local_w, self.local_h))
         if r1<=r and r <r2 and c1<=c and c<c2:
@@ -372,6 +370,7 @@ class Quick_Agent_State:
 
     def clear_goal(self,goalmap):
         #this is local
+        print('clear goal called')
         self.found_goal = False
         ind = np.nonzero(goalmap)
         ind2 = (ind[0] // self.args.grid_resolution,ind[1]//self.args.grid_resolution)
@@ -407,14 +406,14 @@ class Quick_Agent_State:
                 max_ratio = self.local_grid[1,n,m]/self.local_grid[0,n,m]
                 ans["ratio"] = self.local_grid[:,n,m].cpu().numpy()
         ans["total"] = {"score":float(max_score.cpu().numpy()),"cumu":float(max_cumu.cpu().numpy()),"ratio":float(max_ratio.cpu().numpy())}
-        ans["suc"] = self.suc_gt_map(goalmap,self.local_map[0,self.gt_mask_channel,:,:].cpu().numpy()) if self.args.use_gt_mask else -1
+        ans["suc"] = self.suc_gt_map(goalmap,self.local_map[self.gt_mask_channel,:,:].cpu().numpy()) if self.args.use_gt_mask else -1
         ans["step"] = self.step
         if self.args.record_conflict == 1:
-            ans["conflict"] = {"normal":self.get_conflict(goalmap,self.local_map[0,5,:,:].cpu().numpy()),
-                               "black":self.get_black_white_conflict(goalmap,self.local_map[0,6,:,:].cpu().numpy()),
+            ans["conflict"] = {"normal":self.get_conflict(goalmap,self.local_map[5,:,:].cpu().numpy()),
+                               "black":self.get_black_white_conflict(goalmap,self.local_map[6,:,:].cpu().numpy()),
                                "white": self.get_black_white_conflict(goalmap,
                                                                       self.local_map[
-                                                                      0, 7, :,
+                                                                       7, :,
                                                                       :].cpu().numpy())}
 
         return ans
@@ -428,68 +427,66 @@ class Quick_Agent_State:
 
         args = self.args
         self.poses = torch.from_numpy(np.asarray(
-            [infos[env_idx]['sensor_pose'] for env_idx
-             in range(self.num_scenes)])
+            infos['sensor_pose'] )
         ).float().to(self.device)
 
         _, self.local_map, _, self.local_pose = \
             self.sem_map_module(obs, self.poses, self.local_map, self.local_pose,self)
 
         locs = self.local_pose.cpu().numpy()
-        self.planner_pose_inputs[:, :3] = locs + self.origins
-        self.local_map[:, 2, :, :].fill_(0.)  # Resetting current location channel
-        for e in range(self.num_scenes):
-            r, c = locs[e, 1], locs[e, 0]
-            loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
-                            int(c * 100.0 / args.map_resolution)]
-            self.local_map[e, 2:4, loc_r - 2:loc_r + 3, loc_c - 2:loc_c + 3] = 1.
-            if self.args.detect_stuck == 1:
-                glo_r,glo_c = self.lmb[e,0] + loc_r, self.lmb[e,2] + loc_c
-                self.pos_record.append((glo_r,glo_c))
-                l = len(self.pos_record)
-                if len(self.pos_record) > 110:
-                    stuck = True
-                    for i in range(2,100):
-                        dis = abs(glo_r-self.pos_record[l-i][0]) + abs(glo_c-self.pos_record[l-i][1])
-                        if dis > 25:
-                            stuck = False
-                    if stuck:
-                        self.stuck = True
+        self.planner_pose_inputs[:3] = locs + self.origins
+        self.local_map[2, :, :].fill_(0.)  # Resetting current location channel
+
+        r, c = locs[1], locs[0]
+        loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
+                        int(c * 100.0 / args.map_resolution)]
+        self.local_map[2:4, loc_r - 2:loc_r + 3, loc_c - 2:loc_c + 3] = 1.
+        if self.args.detect_stuck == 1:
+            glo_r, glo_c = self.lmb[0] + loc_r, self.lmb[2] + loc_c
+            self.pos_record.append((glo_r, glo_c))
+            l = len(self.pos_record)
+            if len(self.pos_record) > 110:
+                stuck = True
+                for i in range(2, 100):
+                    dis = abs(glo_r - self.pos_record[l - i][0]) + abs(glo_c - self.pos_record[l - i][1])
+                    if dis > 25:
+                        stuck = False
+                if stuck:
+                    self.stuck = True
 
         if self.l_step == args.num_local_steps - 1:
             self.l_step = 0
             # For every global step, update the full and local maps
-            for e in range(self.num_scenes):
 
-                self.full_map[e, :, self.lmb[e, 0]:self.lmb[e, 1], self.lmb[e, 2]:self.lmb[e, 3]] = \
-                    self.local_map[e]
-                res = self.args.grid_resolution
+            self.full_map[:, self.lmb[0]:self.lmb[1], self.lmb[2]:self.lmb[3]] = \
+                self.local_map
+            res = self.args.grid_resolution
 
-                self.grid[:,self.lmb[e,0]//res:self.lmb[e,1]//res, self.lmb[e,2]//res: self.lmb[e,3]//res] = \
-                    torch.clone(self.local_grid)
-                self.full_pose[e] = self.local_pose[e] + \
-                    torch.from_numpy(self.origins[e]).to(self.device).float()
+            self.grid[:, self.lmb[0] // res:self.lmb[1] // res, self.lmb[2] // res: self.lmb[3] // res] = \
+                torch.clone(self.local_grid)
+            self.full_pose = self.local_pose + \
+                             torch.from_numpy(self.origins).to(self.device).float()
 
-                locs = self.full_pose[e].cpu().numpy()
-                r, c = locs[1], locs[0]
-                loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
-                                int(c * 100.0 / args.map_resolution)]
+            locs = self.full_pose.cpu().numpy()
+            r, c = locs[1], locs[0]
+            loc_r, loc_c = [int(r * 100.0 / args.map_resolution),
+                            int(c * 100.0 / args.map_resolution)]
 
-                self.lmb[e] = self.get_local_map_boundaries((loc_r, loc_c),
-                                                  (self.local_w, self.local_h),
-                                                  (self.full_w, self.full_h))
+            self.lmb = self.get_local_map_boundaries((loc_r, loc_c),
+                                                     (self.local_w, self.local_h),
+                                                     (self.full_w, self.full_h))
 
-                self.planner_pose_inputs[e, 3:] = self.lmb[e]
-                self.origins[e] = [self.lmb[e][2] * args.map_resolution / 100.0,
-                              self.lmb[e][0] * args.map_resolution / 100.0, 0.]
+            self.planner_pose_inputs[3:] = self.lmb
+            self.origins = np.array([self.lmb[2] * args.map_resolution / 100.0,
+                            self.lmb[0] * args.map_resolution / 100.0, 0.])
 
-                self.local_map[e] = self.full_map[e, :,
-                                        self.lmb[e, 0]:self.lmb[e, 1],
-                                        self.lmb[e, 2]:self.lmb[e, 3]]
-                self.local_pose[e] = self.full_pose[e] - \
-                    torch.from_numpy(self.origins[e]).to(self.device).float()
-                self.local_grid = torch.clone(self.grid[:, self.lmb[e, 0] // res:self.lmb[e, 1] // res,
-                                  self.lmb[e, 2] // res: self.lmb[e, 3] // res])
+            self.local_map = self.full_map[:,
+                             self.lmb[0]:self.lmb[1],
+                             self.lmb[2]:self.lmb[3]]
+            self.local_pose = self.full_pose - \
+                              torch.from_numpy(self.origins).to(self.device).float()
+            self.local_grid = torch.clone(self.grid[:, self.lmb[0] // res:self.lmb[1] // res,
+                                          self.lmb[2] // res: self.lmb[3] // res])
 
 
             locs = self.local_pose.cpu().numpy()
@@ -509,16 +506,16 @@ class Quick_Agent_State:
 
         # ------------------------------------------------------------------
         # Update long-term goal if target object is found
-        found_goal = [0 for _ in range(self.num_scenes)]
-        goal_maps = [np.zeros((self.local_w, self.local_h)) for _ in range(self.num_scenes)]
+        found_goal = 0
+        goal_maps = np.zeros((self.local_w, self.local_h))
 
-        for e in range(self.num_scenes):
-            goal_maps[e][self.global_goals[e][0], self.global_goals[e][1]] = 1
+
+        goal_maps[self.global_goals[0][0], self.global_goals[0][1]] = 1
 
         maxi = 0.0
         maxc = -1
         maxa = 0.0
-        self.goal_cat = infos[e]['goal_cat_id']
+        self.goal_cat = infos['goal_cat_id']
         e = 0
         cn = 4
         # use the grid to determine global goal
@@ -537,70 +534,39 @@ class Quick_Agent_State:
                     c2 = c1 + self.args.grid_resolution
                     if self.local_grid[4, index[0], index[1]] == 0:
                         if self.recur_fill_grid(index[0], index[1]):
-                            found_goal[e] = 1
+                            found_goal = 1
 
-                if found_goal[e] == 1:
+                if found_goal == 1:
                     self.found_goal = True
                     cat_semantic_scores = self.cat_semantic_map.cpu().numpy()
                     cat_semantic_scores[
                         cat_semantic_scores < self.score_threshold - 0.01] = 0.
-                    goal_maps[e] = cat_semantic_scores
+                    goal_maps = cat_semantic_scores
 
-        if self.args.only_explore == 0 and self.args.goal_selection_scheme == 1 and self.local_map[
-                                                                                    e,
-                                                                                    cn,
-                                                                                    :,
-                                                                                    :].sum() != 0.:
-            maxa = torch.max(self.local_map[e, cn, :, :])
-            if maxa > 0.9:
-                self.found_goal = True
-                if self.args.online_submission == 0:
-                    for obj_id in range(1, 2):
-                        idx = obj_id + 4
-                        b = torch.max(self.local_map[e, idx, :, :][
-                                          self.local_map[e, cn, :,
-                                          :].nonzero(
-                                              as_tuple=True)])
-                        if b > maxi:
-                            maxi = b
-                            maxc = obj_id
-                    if maxi != 0.0:
-                        self.avg_goal_conf += maxa.cpu().numpy()
-                        self.avg_conf_conf += maxi.cpu().numpy()
-                        self.num_conf += 1
-                        self.goal_cat = infos[e]['goal_cat_id']
-                        self.conflict_cat = maxc
 
-                cat_semantic_map = self.local_map[e, cn, :,
-                                   :].cpu().numpy()
-                cat_semantic_scores = cat_semantic_map
-                cat_semantic_scores[cat_semantic_scores < 0.9] = 0.
-                goal_maps[e] = cat_semantic_scores
-                found_goal[e] = 1
 
         # ------------------------------------------------------------------
 
         # ------------------------------------------------------------------
         # Take action and get next observation
-        planner_inputs = [{} for e in range(self.num_scenes)]
-        for e, p_input in enumerate(planner_inputs):
-            p_input['map_pred'] = self.local_map[e, 0, :, :].cpu().numpy()
-            p_input['exp_pred'] = self.local_map[e, 1, :, :].cpu().numpy()
-            p_input['pose_pred'] = self.planner_pose_inputs[e]
-            p_input['goal'] = goal_maps[e]  # global_goals[e]
-            p_input['new_goal'] = self.l_step == args.num_local_steps - 1
-            p_input['found_goal'] = found_goal[e]
-            p_input['wait'] = 0
-            p_input['goal_name'] = infos[e]['goal_name']
-            if args.visualize or args.print_images:
-                self.local_map[e, 8+self.args.use_gt_mask, :, :] = 1e-5
+        p_input = {}
 
+        p_input['map_pred'] = self.local_map[0, :, :].cpu().numpy()
+        p_input['exp_pred'] = self.local_map[1, :, :].cpu().numpy()
+        p_input['pose_pred'] = self.planner_pose_inputs
+        p_input['goal'] = goal_maps  # global_goals[e]
+        p_input['new_goal'] = self.l_step == args.num_local_steps - 1
+        p_input['found_goal'] = found_goal
+        p_input['wait'] = 0
+        p_input['goal_name'] = infos['goal_name']
+        if args.visualize or args.print_images:
+            self.local_map[8 + self.args.use_gt_mask, :, :] = 1e-5
 
-                p_input['sem_map_pred'] = self.local_map[e, 4:, :,
-                                                    :].argmax(0).cpu().numpy()
-                p_input['opp_score'] = maxi
-                p_input['opp_cat'] = maxc
-                p_input['itself'] = maxa
+            p_input['sem_map_pred'] = self.local_map[4:, :,
+                                      :].argmax(0).cpu().numpy()
+            p_input['opp_score'] = maxi
+            p_input['opp_cat'] = maxc
+            p_input['itself'] = maxa
 
         self.inc_step()
-        return planner_inputs
+        return p_input

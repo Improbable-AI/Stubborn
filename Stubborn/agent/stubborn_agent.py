@@ -77,7 +77,7 @@ class QuickAgent(habitat.Agent):
             info['goal_cat_id'] = goal
             info['goal_name'] = habitat_labels_r[goal]
 
-        info = [info]
+        info = info
         obs = obs[np.newaxis,:,:,:]
         # now ready to be passed to agent states
         obs = torch.from_numpy(obs).float().to(self.device)
@@ -89,20 +89,17 @@ class QuickAgent(habitat.Agent):
         planner_inputs = self.agent_states.upd_agent_state(obs,info)
         # now get action
         action = self.agent_helper.plan_act_and_preprocess(planner_inputs)
-        #return {'action':1}
-        #TODO: For real submission, make sure to disable this
         if self.args.no_stop == 1 and action['action'] == 0:
-            print('219 shouldnt happen')
-            self.agent_states.clear_goal_and_set_gt_map(planner_inputs[0]['goal'])
+            self.agent_states.clear_goal_and_set_gt_map(planner_inputs['goal'])
             return {'action':1}
         if action['action'] == 0 and self.args.goal_selection_scheme == 0:
-            item = self.agent_states.goal_record(planner_inputs[0]['goal'])
+            item = self.agent_states.goal_record(planner_inputs['goal'])
             stp = get_prediction(item,goal)
             if stp:
                 return action
             else:
                 self.agent_states.clear_goal(
-                    planner_inputs[0]['goal'])
+                    planner_inputs['goal'])
                 return {'action': 1}
         return action
 
@@ -145,35 +142,3 @@ class QuickAgent(habitat.Agent):
 
 
 
-def main():
-
-    #evaluation = "remote"
-    args_2 = get_args()
-    args_2.sem_gpu_id = 0
-    #args_2.device = "cpu" #TODO : only for debug
-    #args_2.cuda = 0
-
-    config_paths = os.environ["CHALLENGE_CONFIG_FILE"]
-    config = habitat.get_config(config_paths)
-    #agent = RandomAgent(helper_config=args_2, task_config=config)
-
-    #if args.evaluation == "local":
-    #    challenge = habitat.Challenge(eval_remote=False)
-    #else:
-    #    challenge = habitat.Challenge(eval_remote=True)
-
-    #challenge.submit(agent)
-    args_2.num_sem_categories = 23
-    nav_agent = QuickAgent(args=args_2,task_config=config)
-    #nav_agent = ObjNavAgent_mixed(args=args_2,task_config=config)
-
-    if args_2.evaluation == "local":
-        challenge = habitat.Challenge(eval_remote=False)
-    else:
-        challenge = habitat.Challenge(eval_remote=True)
-
-    challenge.submit(nav_agent)
-
-
-if __name__ == "__main__":
-    main()
