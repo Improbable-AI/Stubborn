@@ -503,7 +503,6 @@ class Agent_Helper:
         plt.close()
 
     def _visualize(self, inputs):
-        print("visualize called",self.timestep)
         args = self.args
         dump_dir = "{}/dump/{}/".format(args.dump_location,
                                         args.exp_name)
@@ -537,7 +536,6 @@ class Agent_Helper:
 
         sem_map += 5
         sem_map[self.collision_map[gx1:gx2, gy1:gy2] == 1] = 14
-        print(self.stg)
         sem_map[int(self.stg[0]),int(self.stg[1])] = 15
         #print(sem_map.shape,self.collision_map[gx1:gx2, gy1:gy2].shape)
         #exit(0)

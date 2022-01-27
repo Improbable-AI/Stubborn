@@ -14,7 +14,7 @@ from agent.utils.object_identification import get_prediction
 
 
 
-class QuickAgent(habitat.Agent):
+class StubbornAgent(habitat.Agent):
     def __init__(self,args,task_config: habitat.Config):
         self._POSSIBLE_ACTIONS = task_config.TASK.POSSIBLE_ACTIONS
         self.agent_states = Agent_State(args)

@@ -107,7 +107,6 @@ class Agent_State:
 
 
     def reset(self):
-        print("quick")
         self.l_step = 0
         self.g_step = 0
         self.step = 0
@@ -379,7 +378,6 @@ class Agent_State:
 
     def clear_goal(self,goalmap):
         #this is local
-        print('clear goal called')
         self.found_goal = False
         ind = np.nonzero(goalmap)
         ind2 = (ind[0] // self.args.grid_resolution,ind[1]//self.args.grid_resolution)
