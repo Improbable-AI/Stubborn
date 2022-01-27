@@ -1,4 +1,3 @@
-#FROM fairembodied/habitat-challenge:testing_2021_habitat_base_docker
 FROM fairembodied/habitat-challenge:testing_2021_habitat_base_docker
 
 RUN /bin/bash -c ". activate habitat"
@@ -10,7 +9,6 @@ RUN /bin/bash -c ". activate habitat; pip install matplotlib seaborn==0.9.0 scik
 
 # Install pytorch and torch_scatter
 RUN conda install pytorch=1.6.0 torchvision=0.7.0 cudatoolkit=10.2 -c pytorch
-#RUN /bin/bash -c ". activate habitat; pip install torch_scatter"
 
 # Install detectron2
 RUN /bin/bash -c ". activate habitat; python -m pip install detectron2 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu102/torch1.6/index.html"
