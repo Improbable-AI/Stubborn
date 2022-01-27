@@ -11,14 +11,8 @@ import numpy as np
 
 
 NB = True
-with open('./Stubborn/log_path_16_middle.pickle', 'rb') as handle:
+with open('./Stubborn/obj_id_data.pickle', 'rb') as handle:
     b = pickle.load(handle)
-with open('./Stubborn/log_path_17_conf_middle.pickle', 'rb') as handle:
-    b2 = pickle.load(handle)
-for i in range(len(b)):
-    lg = b[i]['goal_log']
-    for j in range(len(lg)):
-        b[i]['goal_log'][j]['conflict'] = b2[i]['goal_log'][j]['conflict']
 
 stepsize = 200
 

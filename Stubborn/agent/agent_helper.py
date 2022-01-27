@@ -13,6 +13,8 @@ from constants import color_palette
 import agent.utils.pose as pu
 import agent.utils.visualization as vu
 
+
+# The untrap helper for the bruteforce untrap mode
 class UnTrapHelper:
     def __init__(self):
         self.total_id = 0
@@ -37,7 +39,7 @@ class UnTrapHelper:
 
 
 
-class Quick_Sem_Exp_Env_Agent_Helper:
+class Agent_Helper:
     """The Sem_Exp environment agent class. A seperate Sem_Exp_Env_Agent class
     object is used for each environment thread.
 
@@ -65,9 +67,10 @@ class Quick_Sem_Exp_Env_Agent_Helper:
 
         self.obs = None
         self.obs_shape = None
+        # Channel 3 in the paper
         self.collision_map = None
+        # Channel 2 in the paper
         self.collision_map_big = None
-        self.visited = None
         self.visited_vis = None
         self.col_width = None
         self.curr_loc = None
@@ -79,29 +82,22 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         self.episode_no = 0
         self.mask = None
         self.stg = None
-        self.ignore_goal = -1
         self.goal_cat = -1
         self.untrap = UnTrapHelper()
         self.use_small_num = 0
         self.agent_states = agent_states
+
+        # We move forward 1 extra step after approaching goal to make the agent closer to goal
         self.forward_after_stop_preset = self.args.move_forward_after_stop
         self.forward_after_stop = self.forward_after_stop_preset
-        self.goal_map = None
+
         self.plan_step = None
-        self.kk = None
-        self.visited_loc = []
         self.map_size = args.map_size_cm // args.map_resolution
         self.full_w, self.full_h = self.map_size, self.map_size
         self.local_w = int(self.full_w / args.global_downscaling)
         self.local_h = int(self.full_h / args.global_downscaling)
-        self.goal_loc = [(int(0.1 * self.local_w), int(0.1 * self.local_h)),
-                         (int(0.1 * self.local_w), int(0.9 * self.local_h)),
-                         (int(0.9 * self.local_w), int(0.1 * self.local_h)),
-                         (int(0.9 * self.local_w), int(0.9 * self.local_h))]
         self.found_goal = None
-        self.frontier_goal = None
-        self.backtrack_goal = None
-        #self.resnet = ResNet()
+
 
         if args.visualize or args.print_images:
             self.legend = cv2.imread('Stubborn/docs/legend.png')
@@ -119,8 +115,6 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         self.collision_map = np.zeros(map_shape)
         self.collision_map_big = np.zeros(map_shape)
         self.use_small_num = 0
-        self.visited_loc = []
-        self.visited = np.zeros(map_shape)
         self.visited_vis = np.zeros(map_shape)
         self.col_width = 1
         self.count_forward_actions = 0
@@ -135,10 +129,6 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         self.block_threshold = 10
         #self.untrap = UnTrapHelper() #TODO is this needed?
         self.forward_after_stop = self.forward_after_stop_preset
-        self.goal_map = np.zeros((self.local_w, self.local_h))
-        self.goal_map[self.goal_loc[0][0],self.goal_loc[0][1]] = 1
-        self.frontier_goal = None
-        self.backtrack_goal = None
 
 
 
@@ -206,52 +196,7 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         info['g_reward'] += rew
         return obs, info
 
-    def get_frontier(self,map,exp,collision,r,c):
-        if self.timestep % 25 != 0 and self.timestep % 25 != 13:
-            return self.frontier_goal
-        self.kk = 0
-        def in_boundary(r,c):
-            return r>=1 and r<self.local_w-1 and c>=1 and c<self.local_h-1
 
-        def is_frontier(r,c):
-            if not in_boundary(r,c):
-                return False
-            if exp[r,c] == 0:
-                self.kk += 1
-            if exp[r,c] == 0 or map[r,c] != 0:
-                return False
-            mov = [(-1,0),(1,0),(0,1),(0,-1)]
-            for dr,dc in mov:
-                if exp[r+dr,c+dc] == 0 and map[r+dr,c+dc] == 0:
-                    return True
-            return False
-        map = np.zeros((self.local_w, self.local_h))
-        valid = False
-        for i in range(120,240):
-            m = i//2
-            self.kk = 0
-            for j in range(-m,m):
-                nr,nc = r-m,c+j
-
-                if is_frontier(nr,nc):
-                    map[nr,nc] = 1
-                    valid = True
-                nr,nc = r+m,c+j
-                if is_frontier(nr,nc):
-                    map[nr,nc] = 1
-                    valid = True
-                nr,nc = r+j,c-m
-                if is_frontier(nr,nc):
-                    map[nr,nc] = 1
-                    valid = True
-                nr,nc = r+j,c+m
-                if is_frontier(nr, nc):
-                    map[nr, nc] = 1
-                    valid = True
-        if valid:
-            return map
-        else:
-            return None
 
     def _plan(self, planner_inputs):
         """Function responsible for planning
@@ -275,10 +220,8 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         # Get Map prediction
         map_pred = np.rint(planner_inputs['map_pred'])
         self.found_goal = planner_inputs['found_goal']
-        if planner_inputs['found_goal'] == 1 or self.args.smart_global_goal == 0:
-            goal = planner_inputs['goal']
-        else:
-            goal = self.goal_map
+        goal = planner_inputs['goal']
+
 
         # Get pose prediction and global policy planning window
         start_x, start_y, start_o, gx1, gx2, gy1, gy2 = \
@@ -292,38 +235,17 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         start = [int(r * 100.0 / args.map_resolution - gx1),
                  int(c * 100.0 / args.map_resolution - gy1)]
         start = pu.threshold_poses(start, map_pred.shape)
-        if self.args.frontier == 1:
-            self.visited_loc.append((gx1+start[0],gy1+start[1]))
 
-        self.visited[gx1:gx2, gy1:gy2][start[0]:start[0] + 1,
-                                       start[1]:start[1] + 1] = 1
-        if self.args.frontier == 1:
-            frontier_goal = self.get_frontier(planner_inputs['map_pred'],
-                                     planner_inputs['exp_pred'],
-                                     self.collision_map_big,start[0],start[1])
-            if frontier_goal is None and self.timestep > 100:
-                self.backtrack_goal = self.get_backtrack_pos(self.visited_loc, gx1,
-                                                       gx2, gy1, gy2)
-            else:
-                self.backtrack_goal = None
-            if frontier_goal is not None:
-                goal = frontier_goal
-            elif self.backtrack_goal is not None:
-                goal = self.backtrack_goal
-            self.frontier_goal = frontier_goal
-
-
-        if self.args.mark_visited_path == 1 or args.visualize or args.print_images: #TODO: it might be uncessary if visisted_vis is eventually not being used
-            # Get last loc
-            last_start_x, last_start_y = self.last_loc[0], self.last_loc[1]
-            r, c = last_start_y, last_start_x
-            last_start = [int(r * 100.0 / args.map_resolution - gx1),
-                          int(c * 100.0 / args.map_resolution - gy1)]
-            last_start = pu.threshold_poses(last_start, map_pred.shape)
-            self.last_start = last_start
-            self.visited_vis[gx1:gx2, gy1:gy2] = \
-                vu.draw_line(last_start, start,
-                             self.visited_vis[gx1:gx2, gy1:gy2])
+        # Get last loc
+        last_start_x, last_start_y = self.last_loc[0], self.last_loc[1]
+        r, c = last_start_y, last_start_x
+        last_start = [int(r * 100.0 / args.map_resolution - gx1),
+                      int(c * 100.0 / args.map_resolution - gy1)]
+        last_start = pu.threshold_poses(last_start, map_pred.shape)
+        self.last_start = last_start
+        self.visited_vis[gx1:gx2, gy1:gy2] = \
+            vu.draw_line(last_start, start,
+                         self.visited_vis[gx1:gx2, gy1:gy2])
 
         # Collision check
         if self.last_action == 1:
@@ -427,24 +349,8 @@ class Quick_Sem_Exp_Env_Agent_Helper:
                 action = self.untrap.get_action()
             else:
                 action = 1
-        if self.args.turn_around_in_beginning == 1 and planner_inputs['found_goal'] != 1:
-            if self.timestep < 12:
-                action = 2
         self._previous_action = action
         return action
-
-    def get_backtrack_pos(self,vis,x1,x2,y1,y2):
-        l = len(vis)
-        for i in range(1,l):
-            x,y = vis[l-i-1]
-            if x<x1 or x>x2 or y<y1 or y>y2:
-                nx,ny = vis[l-i]
-                if x1<=nx and nx<x2 and y1<=ny and ny<y2:
-                    ans = np.zeros((self.local_w,self.local_h))
-                    ans[nx-x1,ny-y1] = 1
-                    return ans
-        return None
-
 
     def _get_stg(self, grid, start, goal, planning_window):
         """Get short-term goal"""
@@ -479,22 +385,16 @@ class Quick_Sem_Exp_Env_Agent_Helper:
             if surrounded_by_obstacle(self.collision_map[gx1:gx2, gy1:gy2], start[0], start[1]) or \
                 surrounded_by_obstacle(grid,start[0],start[1]):
                 traversible[
-                    self.visited[gx1:gx2, gy1:gy2][x1:x2, y1:y2] == 1] = 1
-                if self.args.mark_visited_path == 1:
-                    traversible[
-                        self.visited_vis[gx1:gx2, gy1:gy2][x1:x2,
-                        y1:y2] == 1] = 1
+                    self.visited_vis[gx1:gx2, gy1:gy2][x1:x2,
+                    y1:y2] == 1] = 1
         else:
             traversible[self.collision_map_big[gx1:gx2, gy1:gy2]
                         [x1:x2, y1:y2] == 1] = 0
             if surrounded_by_obstacle(self.collision_map_big[gx1:gx2, gy1:gy2], start[0], start[1]) or \
                 surrounded_by_obstacle(grid,start[0],start[1]):
                 traversible[
-                    self.visited[gx1:gx2, gy1:gy2][x1:x2, y1:y2] == 1] = 1
-                if self.args.mark_visited_path == 1:
-                    traversible[
-                        self.visited_vis[gx1:gx2, gy1:gy2][x1:x2,
-                        y1:y2] == 1] = 1
+                    self.visited_vis[gx1:gx2, gy1:gy2][x1:x2,
+                    y1:y2] == 1] = 1
 
 
         traversible[int(start[0] - x1) - 1:int(start[0] - x1) + 2,
@@ -504,19 +404,11 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         goal = add_boundary(goal, value=0)
 
         planner = FMMPlanner(traversible)
-        if self.args.frontier == 1:
-            if self.frontier_goal is None:
-                selem = skimage.morphology.disk(10)
-                goal = skimage.morphology.binary_dilation(
-                    goal, selem) != True
-            else:
-                selem = skimage.morphology.disk(1)
-                goal = skimage.morphology.binary_dilation(
-                    goal, selem) != True
-        else:
-            selem = skimage.morphology.disk(10)
-            goal = skimage.morphology.binary_dilation(
-                goal, selem) != True
+
+        selem = skimage.morphology.disk(10)
+        goal = skimage.morphology.binary_dilation(
+            goal, selem) != True
+
         goal = 1 - goal * 1.
         planner.set_multi_goal(goal)
 
@@ -524,57 +416,15 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         # assume replan true suggests failure in planning
         stg_x, stg_y, distance, stop = planner.get_short_term_goal(state)
 
-
+        # Failed to plan a path
         if self.found_goal == 0 and distance > self.args.change_goal_threshold:
-            if self.args.no_small_obstacle == 0:
-                self.use_small_num = 20
+            self.use_small_num = 20
+            # tell the global planner to change goal
             self.agent_states.set_hard_goal()
-            if self.args.frontier == 1 and self.frontier_goal is not None:
-                self.frontier_goal = None
-                if self.backtrack_goal is None:
-                    self.backtrack_goal = self.get_backtrack_pos(self.visited_loc, gx1,
-                                                       gx2, gy1, gy2)
-                if not self.backtrack_goal is None:
-                    goal = np.copy(self.backtrack_goal)
-                    goal = add_boundary(goal, value=0)
-                    selem = skimage.morphology.disk(10)
-                    goal = skimage.morphology.binary_dilation(
-                        goal, selem) != True
-                    goal = 1 - goal * 1.
-                    planner.set_multi_goal(goal)
-                    stg_x, stg_y, distance, stop = planner.get_short_term_goal(
-                        state)
-            if self.args.disable_smartgoal_for_rotation == 0 and distance > self.args.change_goal_threshold and self.plan_step + 10 <= self.timestep:
-                self.plan_step = self.timestep
-                min_distance = 99999
-                min_stg_x = stg_x
-                min_stg_y = stg_y
-                min_i = -1
-                for i in range(4):
-                    self.goal_map[
-                        self.goal_loc[i][0], self.goal_loc[i][1]] = 0
-                for i in range(4):
-                    self.goal_map[
-                        self.goal_loc[i][0], self.goal_loc[i][1]] = 1
-                    goal = np.copy(self.goal_map)
-                    goal = add_boundary(goal, value=0)
-                    selem = skimage.morphology.disk(10)
-                    goal = skimage.morphology.binary_dilation(
-                        goal, selem) != True
-                    goal = 1 - goal * 1.
-                    planner.set_multi_goal(goal)
-                    stg_x, stg_y, distance, stop = planner.get_short_term_goal(
-                        state)
-                    if distance < min_distance:
-                        min_distance, min_stg_x, min_stg_y, min_i = distance, stg_x, stg_y, i
-                    self.goal_map[
-                        self.goal_loc[i][0], self.goal_loc[i][1]] = 0
-                self.goal_map[
-                    self.goal_loc[min_i][0], self.goal_loc[min_i][1]] = 1
-                stg_x = min_stg_x
-                stg_y = min_stg_y
 
-        if self.args.small_collision_map_for_goal ==0 or (self.args.small_collision_map_for_goal == 1 and self.use_small_num > 0):
+
+        #If we are already using the optimistic collision map, but still fail to plan a path to the goal, make goal larger
+        if self.args.small_collision_map_for_goal == 0 or (self.args.small_collision_map_for_goal == 1 and self.use_small_num > 0):
             if self.found_goal == 1 and distance > self.args.magnify_goal_when_hard:
                 radius = 2
                 step = 0
@@ -591,6 +441,7 @@ class Quick_Sem_Exp_Env_Agent_Helper:
                     # assume replan true suggests failure in planning
                     stg_x, stg_y, distance, stop = planner.get_short_term_goal(
                         state)
+        # If we fail to plan a path to the goal, make sure to use optimistic collision map
         if self.found_goal == 1 and distance > self.args.change_goal_threshold:
             if self.args.small_collision_map_for_goal == 1:
                 self.use_small_num = 20
@@ -667,14 +518,9 @@ class Quick_Sem_Exp_Env_Agent_Helper:
         map_pred = inputs['map_pred']
         exp_pred = inputs['exp_pred']
         start_x, start_y, start_o, gx1, gx2, gy1, gy2 = inputs['pose_pred']
-        if self.found_goal == 1 or self.args.smart_global_goal == 0:
-            goal = inputs['goal']
-        else:
-            goal = self.goal_map
-        if self.frontier_goal is not None:
-            goal = self.frontier_goal
-        elif self.backtrack_goal is not None:
-            goal = self.backtrack_goal
+        goal = inputs['goal']
+
+
         sem_map = inputs['sem_map_pred']
         #exit(0)
 

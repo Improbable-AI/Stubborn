@@ -558,8 +558,7 @@ class QuickSemanticPredRedNet():
         max_score = torch.max(output[goal_cat]) - 0.05
         if self.threshold > max_score:
             max_score = self.threshold
-        if self.args.hard_rednet == 1:
-            max_score = 0.9
+
 
         output[goal_cat][output[goal_cat] < max_score] = 0
 

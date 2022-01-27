@@ -5,13 +5,21 @@ We release the code here to help the Robotic community by providing them with a 
 
 
 ### Overview:
-The Stubborn Agent consists of 4 modules: a mapping module, a global goal module, a path planning module,
-and a multi-frame object detection module. The mapping module builds map of obstacles and goal objects over time, the global goal module gives a long term goal for the agent to reach, the path planning
-module plans the actual path to reach the goal, and the goal detection module determines whether the agent has reached the goal object.
+The Stubborn Agent is modified from [Goal-Oriented-Semantic-Policy](https://devendrachaplot.github.io/projects/semantic-exploration) and makes improvement in exploration strategy, untrapping strategy, and object detection strategy, which are discueed in details in the paper.
 
-The primary code contributions from the paper are located in:
+![example](./Stubborn/docs/demo.gif)
 
-TODO: describe where in the source code each modules are located in.
+
+The core of the code in located in `Stubborn/agent`.
+
+`Stubborn/agent/stubborn_agent.py` contains the implementation of the stubborn agent;
+
+`Stubborn/agent/agent_state.py` contains implementation of the global goal module and goal detection module;
+
+`Stubborn/agent/mapping_module.py` contains implementation of the mapping module;
+
+`Stubborn/agent/agent_helper.py` contains implementation of the path planning module.
+
 
 
 ## Requirements
@@ -22,15 +30,21 @@ Users need to download pretrained weights and environment dataset before they ca
 ### Pretrained Weights
 
 Users can download pretrained weights for RedNet [here](https://drive.google.com/drive/folders/1SM75RweHtHQ13lu9fZkVjkOlWMaWpFuZ?usp=sharing).
-Users can download data used to train the Object Detection Module [here](add thi link)
+Download the `rednet_semmap_mp3d_tuned.pth` file and place it in `Stubborn`.
+
+
+Users can download data used to train the Object Detection Module [here](https://drive.google.com/file/d/1M8ArawCSD-91pNvxTvXmXKMwKUFFHKOJ/view?usp=sharing).
+Place `obj_id_data.pickle` into the `Stubborn` folder.
 
 
 ### Downloading scene dataset
-- Download the Matterport 3D dataset using the instructions here: https://niessner.github.io/Matterport/
+- Download the Matterport 3D dataset using the instructions [here](https://niessner.github.io/Matterport/)
 - Move the Matterport 3D scene dataset or create a symlink at `data/scene_datasets/mp3d`.
 
-### Setting up datasets
-The code requires the datasets in a `data` folder in the following format (same as habitat-lab):
+- Download the Matterport 3D Object Navigation Task Data [here](https://dl.fbaipublicfiles.com/habitat/data/datasets/objectnav/m3d/v1/objectnav_mp3d_v1.zip).
+- Move the task dataset to `data/datasets`
+
+- The data folder should look like this:
 ```
 Object-Goal-Navigation/
   data/
@@ -52,19 +66,15 @@ Object-Goal-Navigation/
 ### Test setup
 To verify that the data is setup correctly, run:
 ```
-TODO: add a script that build docker and run it
+sh remote_submission_run.sh
 ```
 
-The pre-trained model should get 0.267 Success, 0.136 SPL and 4.121 DTG.
+The agent should get 0.233 Success, 0.139 SPL and 4.301 DTG.
 
 
-## Cite as
-TODO: make our own
 
-### Bibtex:
-TODO
 
 ## Related Projects
 - This project builds on the [Goal-Oriented Semantic Policy](https://devendrachaplot.github.io/projects/semantic-exploration) paper.
 - Rednet Object Segmentation Model is trained by Joel Ye et. al at https://joel99.github.io/objectnav/.
--
+

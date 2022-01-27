@@ -8,8 +8,8 @@ import numpy as np
 import agent.utils.pose as pu
 from constants import coco_categories, hab2coco, hab2name, habitat_labels_r, fourty221, fourty221_ori, habitat_goal_label_to_similar_coco
 import copy
-from agent.quick_agent_states import Quick_Agent_State
-from agent.agent_helper import Quick_Sem_Exp_Env_Agent_Helper
+from agent.agent_state import Agent_State
+from agent.agent_helper import Agent_Helper
 from agent.utils.object_identification import get_prediction
 
 
@@ -17,18 +17,8 @@ from agent.utils.object_identification import get_prediction
 class QuickAgent(habitat.Agent):
     def __init__(self,args,task_config: habitat.Config):
         self._POSSIBLE_ACTIONS = task_config.TASK.POSSIBLE_ACTIONS
-        self.agent_states = Quick_Agent_State(args)
-        if args.collision_module == 0:
-            self.agent_helper = Quick_Sem_Exp_Env_Agent_Helper(args,self.agent_states)
-        elif args.collision_module == 1:
-            self.agent_helper = Quick_Sem_Exp_Env_Agent_Helper_1(args,
-                                                               self.agent_states)
-        elif args.collision_module == 2:
-            self.agent_helper = Quick_Sem_Exp_Env_Agent_Helper_2(args,
-                                                               self.agent_states)
-        elif args.collision_module == 3:
-            self.agent_helper = Quick_Sem_Exp_Env_Agent_Helper_3(args,
-                                                               self.agent_states)
+        self.agent_states = Agent_State(args)
+        self.agent_helper = Agent_Helper(args,self.agent_states)
         self.last_sim_location = None
         self.device = args.device
         self.first_obs = True
@@ -39,6 +29,7 @@ class QuickAgent(habitat.Agent):
         self.low_score_threshold = 0.7
         self.high_score_threshold = 0.9
         # towel tv shower gym clothes
+        # use a lower confidence score threshold for those categories
         self.low_score_categories = {13,14,15,19,21}
     def reset(self):
         self.agent_helper.reset()
@@ -48,10 +39,10 @@ class QuickAgent(habitat.Agent):
         self.step = 0
         self.timestep = 0
         self.total_episodes += 1
-        #self.agent_helper.set_small_collision_map() # TODO: you probably don't want this!!!
 
     def act(self, observations):
         self.timestep += 1
+        # if passed the step limit and we haven't found the goal, stop.
         if self.timestep > self.args.timestep_limit and self.agent_states.found_goal == False:
             return {'action': 0}
         if self.timestep > 495:
@@ -59,25 +50,16 @@ class QuickAgent(habitat.Agent):
         #get first preprocess
         goal = observations['objectgoal']
         goal = goal[0]+1
-        if self.args.remote_only_one_cat != -1 and goal != self.args.remote_only_one_cat:
-            return {'action':0}
-        if self.args.only6 != 0:
-            if not (goal in hab2coco.keys()):
-                return {'action':0}
-        if self.args.threshold_mode == 0 or ( self.args.threshold_mode == 1 and goal in self.low_score_categories):
+        if goal in self.low_score_categories:
             self.agent_states.score_threshold = self.low_score_threshold
-        if self.args.threshold_mode == 2:
-            self.agent_states.score_threshold = self.high_score_threshold
+
         info = self.get_info(observations)
 
         # get second preprocess
         self.agent_helper.set_goal_cat(goal)
         obs, info = self.agent_helper.preprocess_inputs(observations['rgb'],observations['depth'],info)
-        if self.args.num_sem_categories == 23:
-            info['goal_cat_id'] = goal
-            info['goal_name'] = habitat_labels_r[goal]
-
-        info = info
+        info['goal_cat_id'] = goal
+        info['goal_name'] = habitat_labels_r[goal]
         obs = obs[np.newaxis,:,:,:]
         # now ready to be passed to agent states
         obs = torch.from_numpy(obs).float().to(self.device)
@@ -89,10 +71,11 @@ class QuickAgent(habitat.Agent):
         planner_inputs = self.agent_states.upd_agent_state(obs,info)
         # now get action
         action = self.agent_helper.plan_act_and_preprocess(planner_inputs)
+        # For data collection purpose, collect data to train the object detection module
         if self.args.no_stop == 1 and action['action'] == 0:
             self.agent_states.clear_goal_and_set_gt_map(planner_inputs['goal'])
             return {'action':1}
-        if action['action'] == 0 and self.args.goal_selection_scheme == 0:
+        if action['action'] == 0:
             item = self.agent_states.goal_record(planner_inputs['goal'])
             stp = get_prediction(item,goal)
             if stp:
@@ -113,10 +96,6 @@ class QuickAgent(habitat.Agent):
 
     def get_sim_location(self,obs):
         """Returns x, y, o pose of the agent in the Habitat simulator."""
-
-        #agent_state = super().habitat_env.sim.get_agent_state(0)
-        #x = -agent_state.position[2]
-        #y = -agent_state.position[0]
 
         nap2 = obs['gps'][0]
         nap0 = -obs['gps'][1]
