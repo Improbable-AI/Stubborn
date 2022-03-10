@@ -46,7 +46,7 @@ Place `obj_id_data.pickle` into the `Stubborn` folder.
 
 - The data folder should look like this:
 ```
-Object-Goal-Navigation/
+Stubborn/
   data/
     scene_datasets/
       mp3d/
